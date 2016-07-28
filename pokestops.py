@@ -23,7 +23,6 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 from s2sphere import *
 
-
 def getNeighbors():
     origin = CellId.from_lat_lng(LatLng.from_degrees(FLOAT_LAT, FLOAT_LNG)).parent(15)
 
@@ -93,8 +92,8 @@ r = None
 LANGUAGE='english' #'german' and 'english' supported
 
 LI_TYPE='ptc' #'google'#
-users_ptc= ['ENTER YOUR PTC USERNAME HERE']
-passwords_ptc = ['ENTER YOUR PASSWORD HERE']
+users_ptc= ['ENTER YOUR PTC USERNAME']
+passwords_ptc = ['ENTER YOUR PASSWORD']
 
 users_google=['']
 passwords_google=['']
@@ -102,27 +101,18 @@ passwords_google=['']
 li_user=''
 li_password=''
 
-def prune_data():
-    # prune despawned pokemon
-    cur_time = int(time.time())
-    for i, poke in reversed(list(enumerate(DATA))):
-        if cur_time>poke['despawnTime']:
-            DATA.pop(i)
-
-def write_data_to_file(DATA_FILE):
+def write_data_to_file(POKESTOP_FILE):
     try:
-        f = open(DATA_FILE, 'w')
+        f = open(POKESTOP_FILE, 'w')
         json.dump(DATA, f, indent=2)
     finally:
         f.close()
 
-def add_pokemon(pokeId, spawnID, lat, lng, despawnT):
+def add_stop(stopID, lat, lng):
     DATA.append({
-        'id': pokeId,
-        'spawnID': spawnID,
+        'id': stopID,
         'lat': lat,
         'lng': lng,
-        'despawnTime': despawnT,
     });
 
 def getEarthRadius(latrad):
@@ -425,8 +415,8 @@ def main():
         if interval < 0 or interval > 900:
             raise TypeError('time interval must be between 0 and 900, recommended 600')
 
-    DATA_FILE = 'res/data{}.json'.format(wID)
-    STAT_FILE = 'res/spawns{}.json'.format(wID)
+    STAT_FILE = 'res/stops{}.json'.format(wID)
+    POKESTOP_FILE = 'res/pokestops{}.json'.format(wID)
 
     pokemons = json.load(open('res/'+LANGUAGE+'.json'))
     init_location()
@@ -490,7 +480,7 @@ def main():
     try:
         f=open(STAT_FILE,'a')
         if f.tell()==0:
-            f.write('Name\tid\tSpawnID\tlat\tlng\tspawnTime\tTime\tTime2Hidden\tencounterID\n')
+            f.write('id\tlat\tlng\n')
     finally:
         f.close()
     seen = set([])
@@ -507,35 +497,25 @@ def main():
             try:
                 f= open(STAT_FILE,'a',1)
                 for cell in h.map_cells:
-                    for wild in cell.wild_pokemons:
-                        spawnIDint=int(wild.spawn_point_id, 16)
-                        if (wild.encounter_id not in seen):
-                            seen.add(wild.encounter_id)
-                            org_tth=wild.time_till_hidden_ms
-                            if wild.time_till_hidden_ms < 0:
-                                wild.time_till_hidden_ms=901000
-                            if LOGGING:
-                                other = LatLng.from_degrees(wild.latitude, wild.longitude)
-                                diff = other - origin
-                                difflat = diff.lat().degrees
-                                difflng = diff.lng().degrees
-                                direction = (('N' if difflat >= 0 else 'S') if abs(difflat) > 1e-4 else '')  + (('E' if difflng >= 0 else 'W') if abs(difflng) > 1e-4 else '')
-                                print("<<>> (%s) %s visible for %s seconds (%sm %s from you)" % (wild.pokemon_data.pokemon_id, pokemons[wild.pokemon_data.pokemon_id], int(wild.time_till_hidden_ms/1000.0), int(origin.get_distance(other).radians * 6366468.241830914), direction))
-                            f.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(pokemons[wild.pokemon_data.pokemon_id],wild.pokemon_data.pokemon_id,spawnIDint,wild.latitude,wild.longitude,(wild.last_modified_timestamp_ms+wild.time_till_hidden_ms)/1000.0-900.0,wild.last_modified_timestamp_ms/1000.0,org_tth/1000.0,wild.encounter_id))
-                            add_pokemon(wild.pokemon_data.pokemon_id,spawnIDint, wild.latitude, wild.longitude, int((wild.last_modified_timestamp_ms+wild.time_till_hidden_ms)/1000.0))
+                    for stop in cell.forts:
+                        if (stop.enabled):
+                            if (stop.id not in seen):
+                                seen.add(stop.id)
+                                add_stop(stop.id, stop.latitude, stop.longitude)
             finally:
                 f.close()
-            write_data_to_file(DATA_FILE)
+            write_data_to_file(POKESTOP_FILE)
             #if LOGGING:
                 #print('')
             #time.sleep(1)
 
-        seen.clear()
         curT = int(time.time())-curT
         print('[+] Scan Time: {} s'.format(curT))
         curT=max(interval-curT,0)
-        print('[+] Sleeping for {} seconds...'.format(curT))
-        time.sleep(curT)
-        prune_data()
-if __name__ == '__main__':
-    main()
+        print('Scan complete')
+        RAN = True
+        while RAN == True:
+            time.sleep(99999)
+
+
+main()
